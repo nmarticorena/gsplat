@@ -1134,12 +1134,15 @@ def rasterization_2dgs(
     assert Ks.shape == (C, 3, 3), Ks.shape
     assert render_mode in ["RGB", "D", "ED", "RGB+D", "RGB+ED"], render_mode
     if distloss:
-        assert render_mode in [
-            "D",
-            "ED",
-            "RGB+D",
-            "RGB+ED",
-        ], f"distloss requires depth rendering, render_mode should be D, ED, RGB+D, RGB+ED, but got {render_mode}"
+        assert (
+            render_mode
+            in [
+                "D",
+                "ED",
+                "RGB+D",
+                "RGB+ED",
+            ]
+        ), f"distloss requires depth rendering, render_mode should be D, ED, RGB+D, RGB+ED, but got {render_mode}"
 
     if sh_degree is None:
         # treat colors as post-activation values
@@ -1352,6 +1355,7 @@ def rasterization_2dgs_inria_wrapper(
         GaussianRasterizer,
     )
 
+    # __import__("pdb").set_trace()
     assert eps2d == 0.3, "This is hard-coded in CUDA to be 0.3"
     C = len(viewmats)
     device = means.device
@@ -1362,6 +1366,11 @@ def rasterization_2dgs_inria_wrapper(
     scales = scales[:, :2]  # [N, 2]
 
     render_colors = []
+    render_depths = []
+    render_normals = []
+    render_surfs = []
+    render_dists = []
+    render_alphas = []
     for cid in range(C):
         FoVx = 2 * math.atan(width / (2 * Ks[cid, 0, 0].item()))
         FoVy = 2 * math.atan(height / (2 * Ks[cid, 1, 1].item()))
@@ -1427,36 +1436,49 @@ def rasterization_2dgs_inria_wrapper(
 
         render_colors_ = render_colors_.permute(1, 2, 0)  # [H, W, 3]
         render_colors.append(render_colors_)
+
+        # additional maps
+        allmap = allmap.permute(1, 2, 0).unsqueeze(0)  # [1, H, W, C]
+        render_depth_expected = allmap[..., 0:1]
+        _render_alphas = allmap[..., 1:2]
+        render_normal = allmap[..., 2:5]
+        render_depth_median = allmap[..., 5:6]
+        render_dist = allmap[..., 6:7]
+
+        render_normal = render_normal @ (world_view_transform[:3, :3].T)
+        render_depth_expected = render_depth_expected / _render_alphas
+        render_depth_expected = torch.nan_to_num(render_depth_expected, 0, 0)
+        render_depth_median = torch.nan_to_num(render_depth_median, 0, 0)
+
+        # render_depth is either median or expected by setting depth_ratio to 1 or 0
+        # for bounded scene, use median depth, i.e., depth_ratio = 1;
+        # for unbounded scene, use expected depth, i.e., depth_ratio = 0, to reduce disk aliasing.
+        render_depth = (
+            render_depth_expected * (1 - depth_ratio)
+            + (depth_ratio) * render_depth_median
+        )
+
+        # Concat results
+        render_depths.append(render_depth.squeeze(0))
+        render_normals.append(render_normal)
+        render_dists.append(render_dist)
+        render_alphas.append(_render_alphas.squeeze(0))
+    # __import__("pdb").set_trace()
+
+    render_depth = torch.stack(render_depths, dim=0)
+    render_normal = torch.stack(render_normals, dim=0)
+    render_dist = torch.stack(render_dists, dim=0)
+    render_alphas = torch.stack(render_alphas, dim=0)
+
+    # normals_surf = depth_to_normal(render_depth, torch.linalg.inv(viewmats), Ks)
+    # normals_surf = normals_surf * (render_alphas).detach()
     render_colors = torch.stack(render_colors, dim=0)
-
-    # additional maps
-    allmap = allmap.permute(1, 2, 0).unsqueeze(0)  # [1, H, W, C]
-    render_depth_expected = allmap[..., 0:1]
-    render_alphas = allmap[..., 1:2]
-    render_normal = allmap[..., 2:5]
-    render_depth_median = allmap[..., 5:6]
-    render_dist = allmap[..., 6:7]
-
-    render_normal = render_normal @ (world_view_transform[:3, :3].T)
-    render_depth_expected = render_depth_expected / render_alphas
-    render_depth_expected = torch.nan_to_num(render_depth_expected, 0, 0)
-    render_depth_median = torch.nan_to_num(render_depth_median, 0, 0)
-
-    # render_depth is either median or expected by setting depth_ratio to 1 or 0
-    # for bounded scene, use median depth, i.e., depth_ratio = 1;
-    # for unbounded scene, use expected depth, i.e., depth_ratio = 0, to reduce disk aliasing.
-    render_depth = (
-        render_depth_expected * (1 - depth_ratio) + (depth_ratio) * render_depth_median
-    )
-
-    normals_surf = depth_to_normal(render_depth, torch.linalg.inv(viewmats), Ks)
-    normals_surf = normals_surf * (render_alphas).detach()
 
     render_colors = torch.cat([render_colors, render_depth], dim=-1)
 
     meta = {
         "normals_rend": render_normal,
-        "normals_surf": normals_surf,
+        "normals_surf": None,
         "render_distloss": render_dist,
         "means2d": means2D,
         "width": width,
