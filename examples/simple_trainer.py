@@ -72,7 +72,7 @@ class Config:
     camera_model: Literal["pinhole", "ortho", "fisheye"] = "pinhole"
 
     # Port for the viewer server
-    port: int = 8080
+    port: int = 8081
 
     # Batch size for training. Learning rates are scaled automatically
     batch_size: int = 1
@@ -122,10 +122,10 @@ class Config:
     antialiased: bool = False
 
     # Use random background for training to discourage transparency
-    random_bkgd: bool = False
+    random_bkgd: bool = True
 
     # Opacity regularization
-    opacity_reg: float = 0.0
+    opacity_reg: float = 1e-3
     # Scale regularization
     scale_reg: float = 0.0
 
