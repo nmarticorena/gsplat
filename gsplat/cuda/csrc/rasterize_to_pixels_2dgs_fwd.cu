@@ -303,9 +303,14 @@ __global__ void rasterize_to_pixels_fwd_2dgs_kernel(
             
             S depth = (gauss_weight_3d < gauss_weight_2d) ? s.x * w_M.x + s.y * w_M.y + w_M.z : w_M.z;
             // S depth = s.x * w_M.x + s.y * w_M.y + w_M.z;
-            const S near_n = 0.05f; // TODO: use k_near
-            const S far_n = 100.f; // TODO: use k_near
+            // const S near_n = 0.001f; // TODO: use k_near
+            const S near_n = 0.01060660171f; // NOTE: Stopping distance / sqrt(2)
+            // const S far_n = 0.5f; // TODO: use k_near
+            const S far_n = 10.0f;
             if(depth < near_n){
+                continue;
+            }
+            if(depth > far_n){
                 continue;
             }
 

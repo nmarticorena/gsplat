@@ -347,7 +347,7 @@ __global__ void rasterize_to_pixels_bwd_2dgs_kernel(
 
                 depth = (gauss_weight_3d <= gauss_weight_2d) ? s.x * w_M.x + s.y *w_M.y + w_M.z : w_M.z;
                 // depth = s.x * w_M.x + s.y *w_M.y + w_M.z;
-                const S near_n = 0.05f; // TODO: use k_near
+                const S near_n = 0.001f; // TODO: use k_near
                 if(depth < near_n){
                     valid = false;
                 }
@@ -476,7 +476,7 @@ __global__ void rasterize_to_pixels_bwd_2dgs_kernel(
                 // contribution from distortion
                 if (v_render_distort != nullptr) {
                     // last channel of colors is depth
-                    const S near_n = 0.05f; // TODO: use k_near
+                    const S near_n = 0.001f; // TODO: use k_near
                     const S far_n = 100.f; // TODO: use k_near
                     S m = far_n / (far_n - near_n) * (1 - near_n / depth);
                     // S m = depth;
