@@ -477,7 +477,7 @@ __global__ void rasterize_to_pixels_bwd_2dgs_kernel(
                 if (v_render_distort != nullptr) {
                     // last channel of colors is depth
                     const S near_n = 0.001f; // TODO: use k_near
-                    const S far_n = 100.f; // TODO: use k_near
+                    const S far_n = 1.f; // TODO: use k_near
                     S m = far_n / (far_n - near_n) * (1 - near_n / depth);
                     // S m = depth;
                     S dm_ddepth = (far_n * near_n) / ((far_n - near_n) * depth * depth);
