@@ -81,7 +81,11 @@ _C = None
 try:
     # try to import the compiled module (via setup.py)
     from gsplat import csrc as _C
-except ImportError:
+except ImportError as e:
+    print(e)
+    print(
+        "[yellow]gsplat: Compiled module not found. Trying to build it with JIT compilation.[/yellow]"
+    )
     # if failed, try with JIT compilation
     if cuda_toolkit_available():
         name = "gsplat_cuda"

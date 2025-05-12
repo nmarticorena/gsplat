@@ -1261,6 +1261,8 @@ def rasterization_2dgs(
         densify,
         width,
         height,
+        near_plane,
+        far_plane,
         tile_size,
         isect_offsets,
         flatten_ids,

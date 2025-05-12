@@ -380,6 +380,11 @@ rasterize_to_pixels_fwd_2dgs_tensor(
     // image size
     const uint32_t image_width,
     const uint32_t image_height,
+    // Planes
+    const float near_plane,
+    const float far_plane,
+
+    //Tiles
     const uint32_t tile_size,
     // intersections
     const torch::Tensor &tile_offsets, // [C, tile_height, tile_width]
@@ -407,6 +412,10 @@ rasterize_to_pixels_bwd_2dgs_tensor(
     // image size
     const uint32_t image_width,
     const uint32_t image_height,
+    // Planes
+    const float near_plane,
+    const float far_plane,
+
     const uint32_t tile_size,
     // ray_crossions
     const torch::Tensor &tile_offsets, // [C, tile_height, tile_width]

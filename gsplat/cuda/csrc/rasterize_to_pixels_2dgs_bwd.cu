@@ -31,6 +31,8 @@ __global__ void rasterize_to_pixels_bwd_2dgs_kernel(
 
     const uint32_t image_width,
     const uint32_t image_height,
+    const float near_plane,
+    const float far_plane,
     const uint32_t tile_size,
     const uint32_t tile_width,
     const uint32_t tile_height,
@@ -43,7 +45,7 @@ __global__ void rasterize_to_pixels_bwd_2dgs_kernel(
     const S *__restrict__ render_depths,    // [C, image_height, image_width, 1]
     const S *__restrict__ render_alphas,    // [C, image_height, image_width, 1]
     const S *__restrict__ render_Ts,    // [C, image_height, image_width, 2]
-    const int32_t *__restrict__ last_ids,   // [C, image_height, image_width]     // the id to last gaussian that got intersected 
+    const int32_t *__restrict__ last_ids,   // [C, image_height, image_width]     // the id to last gaussian that got intersected
     const int32_t *__restrict__ median_ids, // [C, image_height, image_width]     // the id to the gaussian that brings the opacity over 0.5
 
     // grad outputs
@@ -79,7 +81,7 @@ __global__ void rasterize_to_pixels_bwd_2dgs_kernel(
     tile_offsets += camera_id * tile_height * tile_width;
     render_alphas += camera_id * image_height * image_width;
     render_Ts += camera_id * image_height * image_width * 2;
-    
+
     last_ids += camera_id * image_height * image_width;
     median_ids += camera_id * image_height * image_width;
 
@@ -226,7 +228,7 @@ __global__ void rasterize_to_pixels_bwd_2dgs_kernel(
      * Calculating Derivatives
      * =======================================================
      */
-     // loop over all batches of primitives 
+     // loop over all batches of primitives
     for (uint32_t b = 0; b < num_batches; ++b) {
         // resync all threads before writing next batch of shared mem
         block.sync();
@@ -302,7 +304,7 @@ __global__ void rasterize_to_pixels_bwd_2dgs_kernel(
             S opac;     // opacity of the currently processed gaussian, per pixel
             S vis;      // visibility of the currently processed gaussian (the pure gaussian weight, not multiplied by opacity), per pixel
             S gauss_weight_3d;    // 3D gaussian weight (using the proper intersection of UV space), per pixel
-            S gauss_weight_2d;    // 2D gaussian weight (using the projected 2D mean), per pixel    
+            S gauss_weight_2d;    // 2D gaussian weight (using the projected 2D mean), per pixel
             S gauss_weight;        // minimum of 3D and 2D gaussian weights, per pixel
 
             vec2<S> s;      // normalized point of intersection on the uv, per pixel
@@ -311,7 +313,7 @@ __global__ void rasterize_to_pixels_bwd_2dgs_kernel(
             vec3<S> h_v;    // homogeneous plane parameter for vs, per pixel
             vec3<S> ray_cross;    // ray cross product, the ray of plane intersection, per pixel
             vec3<S> w_M;    // depth component of the ray transform matrix, per pixel
-            
+
             /**
              * ==================================================
              * Run through the forward pass, but only for the t-th primitive
@@ -324,7 +326,7 @@ __global__ void rasterize_to_pixels_bwd_2dgs_kernel(
 
                 const vec3<S> u_M = u_Ms_batch[t];
                 const vec3<S> v_M = v_Ms_batch[t];
-                
+
                 w_M = w_Ms_batch[t];
 
                 h_u = px * w_M - u_M;
@@ -347,8 +349,8 @@ __global__ void rasterize_to_pixels_bwd_2dgs_kernel(
 
                 depth = (gauss_weight_3d <= gauss_weight_2d) ? s.x * w_M.x + s.y *w_M.y + w_M.z : w_M.z;
                 // depth = s.x * w_M.x + s.y *w_M.y + w_M.z;
-                const S near_n = 0.001f; // TODO: use k_near
-                if(depth < near_n){
+                // const S near_n = 0.001f; // TODO: use k_near
+                if(depth < near_plane){
                     valid = false;
                 }
 
@@ -387,10 +389,10 @@ __global__ void rasterize_to_pixels_bwd_2dgs_kernel(
             vec3<S> v_u_M_local = {0.f, 0.f, 0.f};
             vec3<S> v_v_M_local = {0.f, 0.f, 0.f};
             vec3<S> v_w_M_local = {0.f, 0.f, 0.f};
-            
+
             // 2D mean gradients, used if 2d gaussian weight is applied
             vec2<S> v_xy_local = {0.f, 0.f};
-            
+
             // absolute 2D mean gradients, used if 2d gaussian weight is applied
             vec2<S> v_xy_abs_local = {0.f, 0.f};
 
@@ -476,19 +478,19 @@ __global__ void rasterize_to_pixels_bwd_2dgs_kernel(
                 // contribution from distortion
                 if (v_render_distort != nullptr) {
                     // last channel of colors is depth
-                    const S near_n = 0.001f; // TODO: use k_near
-                    const S far_n = 1.f; // TODO: use k_near
-                    S m = far_n / (far_n - near_n) * (1 - near_n / depth);
+                    // const S near_n = 0.001f; // TODO: use k_near
+                    // const S far_n = 1.f; // TODO: use k_near
+                    S m = far_plane / (far_plane - near_plane) * (1 - near_plane / depth);
                     // S m = depth;
-                    S dm_ddepth = (far_n * near_n) / ((far_n - near_n) * depth * depth);
+                    S dm_ddepth = (far_plane * near_plane) / ((far_plane - near_plane) * depth * depth);
 
                     const S dl_dm = 2.0f * fac * (m * final_A - final_C) * v_distort;
                     v_depth += dl_dm * dm_ddepth;
                     // v_depth += 2.0f * fac * (m * final_A - final_C) * v_distort;
-                    
+
                     // extremely unstable
                     S dl_dw = (m * m * final_A + final_B - 2 * m * final_C) * v_distort;
-                    v_alpha += dl_dw - last_dl_dT; 
+                    v_alpha += dl_dw - last_dl_dT;
                     last_dl_dT = dl_dw * alpha + (1.0f - alpha) * last_dl_dT;
                 }
 
@@ -669,6 +671,9 @@ call_kernel_with_dim(
     // image size
     const uint32_t image_width,
     const uint32_t image_height,
+    // far and near distance
+    const float near_plane,
+    const float far_plane,
     const uint32_t tile_size,
     // ray_crossions
     const torch::Tensor &tile_offsets, // [C, tile_height, tile_width]
@@ -780,6 +785,8 @@ call_kernel_with_dim(
                 masks.has_value() ? masks.value().data_ptr<bool>() : nullptr,
                 image_width,
                 image_height,
+                near_plane,
+                far_plane,
                 tile_size,
                 tile_width,
                 tile_height,
@@ -842,6 +849,10 @@ rasterize_to_pixels_bwd_2dgs_tensor(
     // image size
     const uint32_t image_width,
     const uint32_t image_height,
+    // far and near distance
+    const float near_plane,
+    const float far_plane,
+
     const uint32_t tile_size,
     // ray_crossions
     const torch::Tensor &tile_offsets, // [C, tile_height, tile_width]
@@ -881,6 +892,8 @@ rasterize_to_pixels_bwd_2dgs_tensor(
             masks,                                                             \
             image_width,                                                       \
             image_height,                                                      \
+            near_plane,                                                        \
+            far_plane,                                                         \
             tile_size,                                                         \
             tile_offsets,                                                      \
             flatten_ids,                                                       \

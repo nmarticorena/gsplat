@@ -1632,6 +1632,8 @@ def rasterize_to_pixels_2dgs(
     densify: Tensor,
     image_width: int,
     image_height: int,
+    near_plane: float,
+    far_plane: float,
     tile_size: int,
     isect_offsets: Tensor,
     flatten_ids: Tensor,
@@ -1736,6 +1738,8 @@ def rasterize_to_pixels_2dgs(
         masks,
         image_width,
         image_height,
+        near_plane,
+        far_plane,
         tile_size,
         isect_offsets.contiguous(),
         flatten_ids.contiguous(),
@@ -1849,6 +1853,8 @@ class _RasterizeToPixels2DGS(torch.autograd.Function):
         masks: Tensor,
         width: int,
         height: int,
+        near_plane: float,
+        far_plane: float,
         tile_size: int,
         isect_offsets: Tensor,
         flatten_ids: Tensor,
@@ -1876,6 +1882,8 @@ class _RasterizeToPixels2DGS(torch.autograd.Function):
             masks,
             width,
             height,
+            near_plane,
+            far_plane,
             tile_size,
             isect_offsets,
             flatten_ids,
@@ -1904,6 +1912,8 @@ class _RasterizeToPixels2DGS(torch.autograd.Function):
         ctx.tile_size = tile_size
         ctx.absgrad = absgrad
         ctx.distloss = distloss
+        ctx.near_plane = near_plane
+        ctx.far_plane = far_plane
 
         # doubel to float
         render_alphas = render_alphas.float()
@@ -1949,6 +1959,8 @@ class _RasterizeToPixels2DGS(torch.autograd.Function):
         height = ctx.height
         tile_size = ctx.tile_size
         absgrad = ctx.absgrad
+        near_plane = ctx.near_plane
+        far_plane = ctx.far_plane
 
         (
             v_means2d_abs,
@@ -1969,6 +1981,8 @@ class _RasterizeToPixels2DGS(torch.autograd.Function):
             masks,
             width,
             height,
+            near_plane,
+            far_plane,
             tile_size,
             isect_offsets,
             flatten_ids,
@@ -2008,6 +2022,8 @@ class _RasterizeToPixels2DGS(torch.autograd.Function):
             None,  # masks
             None,  # width
             None,  # height
+            None,  # near_plane
+            None,  # far_plane
             None,  # tile_size
             None,  # isect_offsets
             None,  # flatten_ids

@@ -33,6 +33,8 @@ __global__ void rasterize_to_pixels_fwd_2dgs_kernel(
     const bool *__restrict__ masks,    // [C, tile_height, tile_width]            // Optional tile mask to skip rendering GS to masked tiles.
     const uint32_t image_width,
     const uint32_t image_height,
+    const S near_plane,
+    const S far_plane,
     const uint32_t tile_size,
     const uint32_t tile_width,
     const uint32_t tile_height,
@@ -304,13 +306,13 @@ __global__ void rasterize_to_pixels_fwd_2dgs_kernel(
             S depth = (gauss_weight_3d < gauss_weight_2d) ? s.x * w_M.x + s.y * w_M.y + w_M.z : w_M.z;
             // S depth = s.x * w_M.x + s.y * w_M.y + w_M.z;
             // const S near_n = 0.001f; // TODO: use k_near
-            const S near_n = 0.01060660171f; // NOTE: Stopping distance / sqrt(2)
+            // const S near_n = 0.01060660171f; // NOTE: Stopping distance / sqrt(2)
             // const S far_n = 0.5f; // TODO: use k_near
-            const S far_n = 10.0f;
-            if(depth < near_n){
+            // const S far_n = 1.0f;
+            if(depth < near_plane){
                 continue;
             }
-            if(depth > far_n){
+            if(depth > far_plane){
                 continue;
             }
 
@@ -352,7 +354,7 @@ __global__ void rasterize_to_pixels_fwd_2dgs_kernel(
                 // const S depth = c_ptr[COLOR_DIM - 1];
 
                 S A = 1.0f - T;
-                S m = far_n / (far_n - near_n) * (1 - near_n / depth);
+                S m = far_plane / (far_plane - near_plane) * (1 - near_plane / depth);
                 // S m = depth;
                 distort += (m * m * A + M1 - 2 * m * M2) * vis;
                 M1 += m * m * vis;
@@ -438,6 +440,10 @@ call_kernel_with_dim(
     // image size
     const uint32_t image_width,
     const uint32_t image_height,
+
+    const float near_plane,
+    const float far_plane,
+
     const uint32_t tile_size,
     // intersections
     const torch::Tensor &tile_offsets, // [C, tile_height, tile_width]
@@ -550,6 +556,8 @@ call_kernel_with_dim(
             masks.has_value() ? masks.value().data_ptr<bool>() : nullptr,
             image_width,
             image_height,
+            near_plane,
+            far_plane,
             tile_size,
             tile_width,
             tile_height,
@@ -604,6 +612,10 @@ rasterize_to_pixels_fwd_2dgs_tensor(
     // image size
     const uint32_t image_width,
     const uint32_t image_height,
+    
+    const float near_plane,
+    const float far_plane,
+
     const uint32_t tile_size,
     // intersections
     const torch::Tensor &tile_offsets, // [C, tile_height, tile_width]
@@ -616,7 +628,7 @@ rasterize_to_pixels_fwd_2dgs_tensor(
     case N:                                                                    \
         return call_kernel_with_dim<N>(                                        \
             means2d,                                                           \
-            ray_transforms,                                                            \
+            ray_transforms,                                                    \
             colors,                                                            \
             opacities,                                                         \
             normals,                                                           \
@@ -624,6 +636,8 @@ rasterize_to_pixels_fwd_2dgs_tensor(
             masks,                                                             \
             image_width,                                                       \
             image_height,                                                      \
+            near_plane,                                                        \
+            far_plane,                                                         \
             tile_size,                                                         \
             tile_offsets,                                                      \
             flatten_ids                                                        \

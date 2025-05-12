@@ -201,6 +201,10 @@ __global__ void fully_fused_projection_fwd_2dgs_kernel(
         radii[idx] = 0;
         return;
     }
+    if (radius >= 100){
+        radii[idx] = 0;
+        return;
+    }
 
     // CULLING STEP:
     // mask out gaussians outside the image region
