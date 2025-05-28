@@ -94,13 +94,13 @@ __global__ void fully_fused_projection_fwd_2dgs_kernel(
      * ===============================================
      * Build ray transformation matrix from Primitive to Camera
      * in the original paper, q_ray [xz, yz, z, 1] = WH * q_uv : [u,v,1,1]
-     * 
+     *
      * Thus: RS_camera = R * H(P->W)
 
      * Since H matrix (4x4) is defined as:
      * [v_x v_y 0_vec3  t]
      * [0   0   0       1]
-     * 
+     *
      * thus RS_Camera defined as R * [v_x v_y 0], which gives
      * [R⋅v_x R⋅v_y 0]
      * Thus the only non zero terms will be the first two columns of R
@@ -111,7 +111,7 @@ __global__ void fully_fused_projection_fwd_2dgs_kernel(
      * q_cam = RS_camera * q_uv + mean_c
      *
      * Like with homogeneous coordinates. if we encode incoming 2d points as [u,v,1], we can have:
-     * q_cam = [RS_camera[0,1] | mean_c] * [u,v,1] 
+     * q_cam = [RS_camera[0,1] | mean_c] * [u,v,1]
      * ===============================================
     */
 
@@ -201,7 +201,7 @@ __global__ void fully_fused_projection_fwd_2dgs_kernel(
         radii[idx] = 0;
         return;
     }
-    if (radius >= 100){
+    if (radius >= 100 && far_plane < 1.0){
         radii[idx] = 0;
         return;
     }
@@ -210,7 +210,7 @@ __global__ void fully_fused_projection_fwd_2dgs_kernel(
     // mask out gaussians outside the image region
     if (mean2d.x + radius <= 0 || mean2d.x - radius >= image_width ||
         mean2d.y + radius <= 0 || mean2d.y - radius >= image_height) {
-        radii[idx] = 0;  
+        radii[idx] = 0;
         return;
     }
 
