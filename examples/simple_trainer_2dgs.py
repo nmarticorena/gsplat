@@ -3,7 +3,7 @@ import math
 import os
 import time
 from dataclasses import dataclass, field
-from typing import Dict, List, Literal, Optional, Tuple
+from typing import Dict, List, Literal, Optional, Tuple, Union, assert_never
 
 import imageio
 import nerfview
@@ -30,7 +30,7 @@ from utils import (
 )
 
 from gsplat.rendering import rasterization_2dgs, rasterization_2dgs_inria_wrapper
-from gsplat.strategy import DefaultStrategy
+from gsplat.strategy import DefaultStrategy, MCMCStrategy
 
 
 @dataclass
@@ -67,6 +67,11 @@ class Config:
     eval_steps: List[int] = field(default_factory=lambda: [7_000, 30_000])
     # Steps to save the model
     save_steps: List[int] = field(default_factory=lambda: [7_000, 30_000])
+
+    # Strategy for GS densification
+    strategy: Union[DefaultStrategy, MCMCStrategy] = field(
+        default_factory=DefaultStrategy
+    )
 
     # Initialization strategy
     init_type: str = "sfm"
@@ -160,7 +165,7 @@ class Config:
     dist_start_iter: int = 3_000
 
     # Model for splatting.
-    model_type: Literal["2dgs", "2dgs-inria"] = "2dgs-inria"
+    model_type: Literal["2dgs", "2dgs-inria"] = "2dgs"
 
     # Dump information to tensorboard every this steps
     tb_every: int = 100
@@ -176,6 +181,19 @@ class Config:
         self.refine_stop_iter = int(self.refine_stop_iter * factor)
         self.reset_every = int(self.reset_every * factor)
         self.refine_every = int(self.refine_every * factor)
+        strategy = self.strategy
+        if isinstance(strategy, DefaultStrategy):
+            strategy.refine_start_iter = int(strategy.refine_start_iter * factor)
+            strategy.refine_stop_iter = int(strategy.refine_stop_iter * factor)
+            strategy.reset_every = int(strategy.reset_every * factor)
+            strategy.refine_every = int(strategy.refine_every * factor)
+        elif isinstance(strategy, MCMCStrategy):
+            strategy.refine_start_iter = int(strategy.refine_start_iter * factor)
+            strategy.refine_stop_iter = int(strategy.refine_stop_iter * factor)
+            strategy.refine_every = int(strategy.refine_every * factor)
+        else:
+            assert_never(strategy)
+
 
 
 def create_splats_with_optimizers(
@@ -310,24 +328,16 @@ class Runner:
         else:
             key_for_gradient = "means2d"
 
-        # Densification Strategy
-        self.strategy = DefaultStrategy(
-            verbose=True,
-            prune_opa=cfg.prune_opa,
-            grow_grad2d=cfg.grow_grad2d,
-            grow_scale3d=cfg.grow_scale3d,
-            prune_scale3d=cfg.prune_scale3d,
-            # refine_scale2d_stop_iter=4000, # splatfacto behavior
-            refine_start_iter=cfg.refine_start_iter,
-            refine_stop_iter=cfg.refine_stop_iter,
-            reset_every=cfg.reset_every,
-            refine_every=cfg.refine_every,
-            absgrad=cfg.absgrad,
-            revised_opacity=cfg.revised_opacity,
-            key_for_gradient=key_for_gradient,
-        )
-        self.strategy.check_sanity(self.splats, self.optimizers)
-        self.strategy_state = self.strategy.initialize_state()
+        self.cfg.strategy.check_sanity(self.splats, self.optimizers)
+        if isinstance(self.cfg.strategy, DefaultStrategy):
+            self.strategy_state = self.cfg.strategy.initialize_state(
+                scene_scale=self.scene_scale
+            )
+        elif isinstance(self.cfg.strategy, MCMCStrategy):
+            self.strategy_state = self.cfg.strategy.initialize_state()
+        else:
+            assert_never(self.cfg.strategy)
+
 
         self.pose_optimizers = []
         if cfg.pose_opt:
@@ -570,7 +580,7 @@ class Runner:
                 bkgd = torch.rand(1, 3, device=device)
                 colors = colors + bkgd * (1.0 - alphas)
 
-            self.strategy.step_pre_backward(
+            self.cfg.strategy.step_pre_backward(
                 params=self.splats,
                 optimizers=self.optimizers,
                 state=self.strategy_state,
@@ -668,14 +678,28 @@ class Runner:
                     self.writer.add_image("train/render", canvas, step)
                 self.writer.flush()
 
-            self.strategy.step_post_backward(
-                params=self.splats,
-                optimizers=self.optimizers,
-                state=self.strategy_state,
-                step=step,
-                info=info,
-                packed=cfg.packed,
-            )
+            # Run post-backward steps after backward and optimizer
+            if isinstance(self.cfg.strategy, DefaultStrategy):
+                self.cfg.strategy.step_post_backward(
+                    params=self.splats,
+                    optimizers=self.optimizers,
+                    state=self.strategy_state,
+                    step=step,
+                    info=info,
+                    packed=cfg.packed,
+                )
+            elif isinstance(self.cfg.strategy, MCMCStrategy):
+                self.cfg.strategy.step_post_backward(
+                    params=self.splats,
+                    optimizers=self.optimizers,
+                    state=self.strategy_state,
+                    step=step,
+                    info=info,
+                    lr=schedulers[0].get_last_lr()[0],
+                )
+            else:
+                assert_never(self.cfg.strategy)
+
 
             # Turn Gradients into Sparse Tensor before running optimizer
             if cfg.sparse_grad:
@@ -969,6 +993,28 @@ def main(cfg: Config):
 
 
 if __name__ == "__main__":
-    cfg = tyro.cli(Config)
+
+    # Config objects we can choose between.
+    # Each is a tuple of (CLI description, config object).
+    configs = {
+        "default": (
+            "Gaussian splatting training using densification heuristics from the original paper.",
+            Config(
+                strategy=DefaultStrategy(verbose=True),
+            ),
+        ),
+        "mcmc": (
+            "Gaussian splatting training using densification from the paper '3D Gaussian Splatting as Markov Chain Monte Carlo'.",
+            Config(
+                init_opa=0.5,
+                init_scale=0.1,
+                opacity_reg=0.01,
+                scale_reg=0.01,
+                strategy=MCMCStrategy(verbose=True),
+            ),
+        ),
+    }
+    cfg = tyro.extras.overridable_config_cli(configs)
     cfg.adjust_steps(cfg.steps_scaler)
+
     main(cfg)
