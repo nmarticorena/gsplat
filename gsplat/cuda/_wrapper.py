@@ -1634,6 +1634,7 @@ def rasterize_to_pixels_2dgs(
     image_height: int,
     near_plane: float,
     far_plane: float,
+    median_cutoff: float,
     tile_size: int,
     isect_offsets: Tensor,
     flatten_ids: Tensor,
@@ -1740,6 +1741,7 @@ def rasterize_to_pixels_2dgs(
         image_height,
         near_plane,
         far_plane,
+        median_cutoff,
         tile_size,
         isect_offsets.contiguous(),
         flatten_ids.contiguous(),
@@ -1855,6 +1857,7 @@ class _RasterizeToPixels2DGS(torch.autograd.Function):
         height: int,
         near_plane: float,
         far_plane: float,
+        median_cutoff: float,
         tile_size: int,
         isect_offsets: Tensor,
         flatten_ids: Tensor,
@@ -1884,6 +1887,7 @@ class _RasterizeToPixels2DGS(torch.autograd.Function):
             height,
             near_plane,
             far_plane,
+            median_cutoff,
             tile_size,
             isect_offsets,
             flatten_ids,
@@ -1914,6 +1918,7 @@ class _RasterizeToPixels2DGS(torch.autograd.Function):
         ctx.distloss = distloss
         ctx.near_plane = near_plane
         ctx.far_plane = far_plane
+        ctx.median_cutoff = median_cutoff
 
         # doubel to float
         render_alphas = render_alphas.float()
@@ -2024,6 +2029,7 @@ class _RasterizeToPixels2DGS(torch.autograd.Function):
             None,  # height
             None,  # near_plane
             None,  # far_plane
+            None,  # median_cutoff
             None,  # tile_size
             None,  # isect_offsets
             None,  # flatten_ids

@@ -35,14 +35,15 @@ __global__ void rasterize_to_pixels_fwd_2dgs_kernel(
     const uint32_t image_height,
     const S near_plane,
     const S far_plane,
+    const S median_cutoff, // the cutoff for median depth contribution, if the transmittance is larger than this value, we consider it as a median depth contribution.
     const uint32_t tile_size,
     const uint32_t tile_width,
     const uint32_t tile_height,
     const int32_t *__restrict__ tile_offsets, // [C, tile_height, tile_width]    // Intersection offsets outputs from `isect_offset_encode()`, this is the result of a prefix sum, and
                                                                                  // gives the interval that our gaussians are gonna use.
     const int32_t *__restrict__ flatten_ids,  // [n_isects]                      // The global flatten indices in [C * N] or [nnz] from  `isect_tiles()`.
-    
-    
+
+
     // outputs
     S *__restrict__ render_colors,  // [C, image_height, image_width, COLOR_DIM]
     S *__restrict__ render_depths,  // [C, image_height, image_width, 1]
@@ -116,7 +117,7 @@ __global__ void rasterize_to_pixels_fwd_2dgs_kernel(
     // first collect gaussians between range.x and range.y in batches
     // which gaussians to look through in this tile
 
-    // print 
+    // print
     int32_t range_start = tile_offsets[tile_id];
     int32_t range_end =
         // see if this is the last tile in the camera
@@ -131,7 +132,7 @@ __global__ void rasterize_to_pixels_fwd_2dgs_kernel(
      * ==============================
      * Register computing variables:
      * For each pixel, we need to find its uv intersection with the gaussian primitives.
-     * then we retrieve the kernel's parameters and kernel weights 
+     * then we retrieve the kernel's parameters and kernel weights
      * do the splatting rendering equation.
      * ==============================
      */
@@ -162,7 +163,7 @@ __global__ void rasterize_to_pixels_fwd_2dgs_kernel(
     // collect and process batches of gaussians
     // each thread loads one gaussian at a time before rasterizing its
     // designated pixel
-    uint32_t tr = block.thread_rank();  
+    uint32_t tr = block.thread_rank();
 
     // Per-pixel distortion error proposed in Mip-NeRF 360.
     // Implemented reference:
@@ -229,21 +230,21 @@ __global__ void rasterize_to_pixels_fwd_2dgs_kernel(
          * ==================================================
          * Forward rasterization pass:
          * ==================================================
-         * 
+         *
          * GSplat computes rasterization point of intersection as:
          * 1. Generate 2 homogeneous plane parameter vectors as sets of points in UV space
          * 2. Find the set of points that satisfy both conditions with the cross product
          * 3. Find where this solution set intersects with UV plane using projective flattening
-         * 
+         *
          * For each gaussian G_i and pixel q_xy:
-         * 
+         *
          * 1. Compute homogeneous plane parameters:
          *    h_u = p_x * M_w - M_u
          *    h_v = p_y * M_w - M_v
          *    where M_u, M_v, M_w are rows of the KWH transform
          *
          * Note: this works because:
-         *    for any vector q_uv [u, v, 1], applying co-vector h_u will yield the following expression: 
+         *    for any vector q_uv [u, v, 1], applying co-vector h_u will yield the following expression:
          *    h_u * [u, v, 1]^T = P_x * (M_w * q_uv) - M_u * q_uv
          *                      = P_x * q_ray.z - q_ray.x * q_ray.z
          *    - where P_x is the x-coordinate of the ray origin
@@ -253,19 +254,19 @@ __global__ void rasterize_to_pixels_fwd_2dgs_kernel(
          * 2. Compute intersection:
          *    zeta = h_u × h_v
          *    This cross product is the only solution that satisfies both homogeneous plane equations (dot product == 0)
-         * 
+         *
          * 3. Project to UV space:
          *    s_uv = [zeta_1/zeta_3, zeta_2/zeta_3]
          *    - since UV space is essentially another ray space, and arbitrary scale of q_uv will not change the result of dot product over orthogonality
          *    - thus, the result is the point of intersection in UV space
-         * 
+         *
          * 4. Evaluate gaussian kernel:
          *    G_i = exp(-(s_u^2 + s_v^2)/2)
-         * 
+         *
          * 5. Accumulate color:
          *    p_xy += alpha_i * c_i * G_i * prod(1 - alpha_j * G_j)
-         * 
-         * This method efficiently computes the point of intersection and 
+         *
+         * This method efficiently computes the point of intersection and
          * evaluates the gaussian kernel in UV space.
          * Note: in some cases, we use the minimum of ray-intersection kernels and 2D projected gaussian kernels
          */
@@ -294,15 +295,15 @@ __global__ void rasterize_to_pixels_fwd_2dgs_kernel(
 
             // point of interseciton in uv space
             const S gauss_weight_3d = s.x * s.x + s.y * s.y;
-            
+
             // projected gaussian kernel
             const vec2<S> d = {xy_opac.x - px, xy_opac.y - py};
             // #define FILTER_INV_SQUARE 2.0f
             const S gauss_weight_2d = FILTER_INV_SQUARE * (d.x * d.x + d.y * d.y);
-            
+
             // merge ray-intersection kernel and 2d gaussian kernel
             const S gauss_weight = min(gauss_weight_3d, gauss_weight_2d);
-            
+
             S depth = (gauss_weight_3d < gauss_weight_2d) ? s.x * w_M.x + s.y * w_M.y + w_M.z : w_M.z;
             // S depth = s.x * w_M.x + s.y * w_M.y + w_M.z;
             // const S near_n = 0.001f; // TODO: use k_near
@@ -372,7 +373,7 @@ __global__ void rasterize_to_pixels_fwd_2dgs_kernel(
             }
 
             // compute median depth
-            if (T > 0.5) {
+            if (T > median_cutoff) {
                 // median_depth = c_ptr[COLOR_DIM - 1];
                 median_depth = depth;
                 median_idx = batch_start + t;
@@ -443,6 +444,7 @@ call_kernel_with_dim(
 
     const float near_plane,
     const float far_plane,
+    const float median_cutoff,
 
     const uint32_t tile_size,
     // intersections
@@ -558,6 +560,7 @@ call_kernel_with_dim(
             image_height,
             near_plane,
             far_plane,
+            median_cutoff,
             tile_size,
             tile_width,
             tile_height,
@@ -612,9 +615,10 @@ rasterize_to_pixels_fwd_2dgs_tensor(
     // image size
     const uint32_t image_width,
     const uint32_t image_height,
-    
+
     const float near_plane,
     const float far_plane,
+    const float median_cutoff,
 
     const uint32_t tile_size,
     // intersections
@@ -638,6 +642,7 @@ rasterize_to_pixels_fwd_2dgs_tensor(
             image_height,                                                      \
             near_plane,                                                        \
             far_plane,                                                         \
+            median_cutoff,                                                     \
             tile_size,                                                         \
             tile_offsets,                                                      \
             flatten_ids                                                        \

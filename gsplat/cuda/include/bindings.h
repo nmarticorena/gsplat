@@ -383,6 +383,8 @@ rasterize_to_pixels_fwd_2dgs_tensor(
     // Planes
     const float near_plane,
     const float far_plane,
+    // Meadian depth cutoff
+    const float median_cutoff,
 
     //Tiles
     const uint32_t tile_size,
