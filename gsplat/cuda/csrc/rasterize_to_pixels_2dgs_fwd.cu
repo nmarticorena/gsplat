@@ -35,6 +35,7 @@ __global__ void rasterize_to_pixels_fwd_2dgs_kernel(
     const uint32_t image_height,
     const S near_plane,
     const S far_plane,
+    const S max_radius,
     const S median_cutoff, // the cutoff for median depth contribution, if the transmittance is larger than this value, we consider it as a median depth contribution.
     const uint32_t tile_size,
     const uint32_t tile_width,
@@ -444,6 +445,7 @@ call_kernel_with_dim(
 
     const float near_plane,
     const float far_plane,
+    const float max_radius,
     const float median_cutoff,
 
     const uint32_t tile_size,
@@ -560,6 +562,7 @@ call_kernel_with_dim(
             image_height,
             near_plane,
             far_plane,
+            max_radius,
             median_cutoff,
             tile_size,
             tile_width,
@@ -618,6 +621,7 @@ rasterize_to_pixels_fwd_2dgs_tensor(
 
     const float near_plane,
     const float far_plane,
+    const float max_radius,
     const float median_cutoff,
 
     const uint32_t tile_size,
@@ -642,6 +646,7 @@ rasterize_to_pixels_fwd_2dgs_tensor(
             image_height,                                                      \
             near_plane,                                                        \
             far_plane,                                                         \
+            max_radius,                                                        \
             median_cutoff,                                                     \
             tile_size,                                                         \
             tile_offsets,                                                      \

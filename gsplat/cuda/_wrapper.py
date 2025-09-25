@@ -212,6 +212,7 @@ def fully_fused_projection(
     eps2d: float = 0.3,
     near_plane: float = 0.01,
     far_plane: float = 1e10,
+    max_radius: float = 100,
     radius_clip: float = 0.0,
     packed: bool = False,
     sparse_grad: bool = False,
@@ -1268,6 +1269,7 @@ def fully_fused_projection_2dgs(
     eps2d: float = 0.3,
     near_plane: float = 0.01,
     far_plane: float = 1e10,
+    max_radius: float = 100.0,
     radius_clip: float = 0.0,
     packed: bool = False,
     sparse_grad: bool = False,
@@ -1342,6 +1344,7 @@ def fully_fused_projection_2dgs(
             height,
             near_plane,
             far_plane,
+            max_radius,
             radius_clip,
             sparse_grad,
         )
@@ -1357,6 +1360,7 @@ def fully_fused_projection_2dgs(
             eps2d,
             near_plane,
             far_plane,
+            max_radius,
             radius_clip,
         )
 
@@ -1377,6 +1381,7 @@ class _FullyFusedProjection2DGS(torch.autograd.Function):
         eps2d: float,
         near_plane: float,
         far_plane: float,
+        max_radius: float,
         radius_clip: float,
     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         radii, means2d, depths, ray_transforms, normals = _make_lazy_cuda_func(
@@ -1392,6 +1397,7 @@ class _FullyFusedProjection2DGS(torch.autograd.Function):
             eps2d,
             near_plane,
             far_plane,
+            max_radius,
             radius_clip,
         )
         ctx.save_for_backward(
@@ -1483,6 +1489,7 @@ class _FullyFusedProjectionPacked2DGS(torch.autograd.Function):
         height: int,
         near_plane: float,
         far_plane: float,
+        max_radius: float,
         radius_clip: float,
         sparse_grad: bool,
     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
@@ -1505,6 +1512,7 @@ class _FullyFusedProjectionPacked2DGS(torch.autograd.Function):
             height,
             near_plane,
             far_plane,
+            max_radius,
             radius_clip,
         )
         ctx.save_for_backward(
@@ -1634,6 +1642,7 @@ def rasterize_to_pixels_2dgs(
     image_height: int,
     near_plane: float,
     far_plane: float,
+    max_radius: float,
     median_cutoff: float,
     tile_size: int,
     isect_offsets: Tensor,
@@ -1741,6 +1750,7 @@ def rasterize_to_pixels_2dgs(
         image_height,
         near_plane,
         far_plane,
+        max_radius,
         median_cutoff,
         tile_size,
         isect_offsets.contiguous(),
@@ -1857,6 +1867,7 @@ class _RasterizeToPixels2DGS(torch.autograd.Function):
         height: int,
         near_plane: float,
         far_plane: float,
+        max_radius: float,
         median_cutoff: float,
         tile_size: int,
         isect_offsets: Tensor,
@@ -1887,6 +1898,7 @@ class _RasterizeToPixels2DGS(torch.autograd.Function):
             height,
             near_plane,
             far_plane,
+            max_radius,
             median_cutoff,
             tile_size,
             isect_offsets,
@@ -1918,6 +1930,7 @@ class _RasterizeToPixels2DGS(torch.autograd.Function):
         ctx.distloss = distloss
         ctx.near_plane = near_plane
         ctx.far_plane = far_plane
+        ctx.max_radius = max_radius
         ctx.median_cutoff = median_cutoff
 
         # doubel to float
@@ -1966,6 +1979,7 @@ class _RasterizeToPixels2DGS(torch.autograd.Function):
         absgrad = ctx.absgrad
         near_plane = ctx.near_plane
         far_plane = ctx.far_plane
+        max_radius = ctx.max_radius
 
         (
             v_means2d_abs,
@@ -1988,6 +2002,7 @@ class _RasterizeToPixels2DGS(torch.autograd.Function):
             height,
             near_plane,
             far_plane,
+            max_radius,
             tile_size,
             isect_offsets,
             flatten_ids,
@@ -2029,6 +2044,7 @@ class _RasterizeToPixels2DGS(torch.autograd.Function):
             None,  # height
             None,  # near_plane
             None,  # far_plane
+            None,  # max_radius
             None,  # median_cutoff
             None,  # tile_size
             None,  # isect_offsets

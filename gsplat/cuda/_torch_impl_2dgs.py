@@ -16,6 +16,7 @@ def _fully_fused_projection_2dgs(
     height: int,
     near_plane: float = 0.01,
     far_plane: float = 1e10,
+    max_radius: float = 100.0,
     eps: float = 1e-6,
 ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
     """PyTorch implementation of `gsplat.cuda._wrapper.fully_fused_projection_2dgs()`

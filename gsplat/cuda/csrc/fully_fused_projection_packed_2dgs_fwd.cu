@@ -31,6 +31,7 @@ __global__ void fully_fused_projection_packed_fwd_2dgs_kernel(
     const int32_t image_height,
     const T near_plane,
     const T far_plane,
+    const T max_radius,
     const T radius_clip,
     const int32_t
         *__restrict__ block_accum,    // [C * blocks_per_row] packing helper
@@ -244,6 +245,7 @@ fully_fused_projection_packed_fwd_2dgs_tensor(
     const uint32_t image_height,
     const float near_plane,
     const float far_plane,
+    const float max_radius,
     const float radius_clip
 ) {
     GSPLAT_DEVICE_GUARD(means);
@@ -284,6 +286,7 @@ fully_fused_projection_packed_fwd_2dgs_tensor(
                 image_height,
                 near_plane,
                 far_plane,
+                max_radius,
                 radius_clip,
                 nullptr,
                 block_cnts.data_ptr<int32_t>(),
@@ -331,6 +334,7 @@ fully_fused_projection_packed_fwd_2dgs_tensor(
                 image_height,
                 near_plane,
                 far_plane,
+                max_radius,
                 radius_clip,
                 block_accum.data_ptr<int32_t>(),
                 nullptr,

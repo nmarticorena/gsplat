@@ -35,6 +35,7 @@ __global__ void fully_fused_projection_fwd_2dgs_kernel(
     const int32_t image_height,      // Image height pixels
     const T near_plane,              // Near clipping plane (for finite range used in z sorting)
     const T far_plane,               // Far clipping plane (for finite range used in z sorting)
+    const T max_radius,       // Maximum radius allowed (to avoid numerical issues)
     const T radius_clip,             // Radius clipping threshold (through away small primitives)
     // outputs
     int32_t *__restrict__ radii, // [C, N]   The maximum radius of the projected Gaussians in pixel unit. Int32 tensor of shape [C, N].
@@ -201,7 +202,7 @@ __global__ void fully_fused_projection_fwd_2dgs_kernel(
         radii[idx] = 0;
         return;
     }
-    if (radius >= 100 && far_plane < 1.0){
+    if (radius >= max_radius){
         radii[idx] = 0;
         return;
     }
@@ -260,6 +261,7 @@ fully_fused_projection_fwd_2dgs_tensor(
     const float eps2d,
     const float near_plane,
     const float far_plane,
+    const float max_radius,
     const float radius_clip
 ) {
     GSPLAT_DEVICE_GUARD(means);
@@ -297,6 +299,7 @@ fully_fused_projection_fwd_2dgs_tensor(
                 image_height,
                 near_plane,
                 far_plane,
+                max_radius,
                 radius_clip,
                 radii.data_ptr<int32_t>(),
                 means2d.data_ptr<float>(),

@@ -333,6 +333,7 @@ fully_fused_projection_fwd_2dgs_tensor(
     const float eps2d,
     const float near_plane,
     const float far_plane,
+    const float max_radius,
     const float radius_clip
 );
 
@@ -383,6 +384,7 @@ rasterize_to_pixels_fwd_2dgs_tensor(
     // Planes
     const float near_plane,
     const float far_plane,
+    const float max_radius,
     // Meadian depth cutoff
     const float median_cutoff,
 
@@ -417,6 +419,7 @@ rasterize_to_pixels_bwd_2dgs_tensor(
     // Planes
     const float near_plane,
     const float far_plane,
+    const float max_radius,
 
     const uint32_t tile_size,
     // ray_crossions
@@ -480,6 +483,7 @@ fully_fused_projection_packed_fwd_2dgs_tensor(
     const uint32_t image_height,
     const float near_plane,
     const float far_plane,
+    const float max_radius,
     const float radius_clip
 );
 

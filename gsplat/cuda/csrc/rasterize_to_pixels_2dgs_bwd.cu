@@ -33,6 +33,7 @@ __global__ void rasterize_to_pixels_bwd_2dgs_kernel(
     const uint32_t image_height,
     const float near_plane,
     const float far_plane,
+    const float max_radius,
     const uint32_t tile_size,
     const uint32_t tile_width,
     const uint32_t tile_height,
@@ -674,6 +675,7 @@ call_kernel_with_dim(
     // far and near distance
     const float near_plane,
     const float far_plane,
+    const float max_radius,
     const uint32_t tile_size,
     // ray_crossions
     const torch::Tensor &tile_offsets, // [C, tile_height, tile_width]
@@ -787,6 +789,7 @@ call_kernel_with_dim(
                 image_height,
                 near_plane,
                 far_plane,
+                max_radius,
                 tile_size,
                 tile_width,
                 tile_height,
@@ -852,6 +855,7 @@ rasterize_to_pixels_bwd_2dgs_tensor(
     // far and near distance
     const float near_plane,
     const float far_plane,
+    const float max_radius,
 
     const uint32_t tile_size,
     // ray_crossions
@@ -894,6 +898,7 @@ rasterize_to_pixels_bwd_2dgs_tensor(
             image_height,                                                      \
             near_plane,                                                        \
             far_plane,                                                         \
+            max_radius,                                                        \
             tile_size,                                                         \
             tile_offsets,                                                      \
             flatten_ids,                                                       \
